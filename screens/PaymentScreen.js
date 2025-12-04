@@ -7,9 +7,12 @@ import {
   TextInput,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useCart } from '../context/CartContext';
 import { colors } from '../constants/colors';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function PaymentScreen({ navigation }) {
   const [paymentMethod, setPaymentMethod] = useState('newCard');
@@ -18,13 +21,73 @@ export default function PaymentScreen({ navigation }) {
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [nameOnCard, setNameOnCard] = useState('');
-  const { getCartTotal, clearCart } = useCart();
+  const [processing, setProcessing] = useState(false);
+  const { getCartTotal, clearCart, cartId, userId } = useCart();
   const { total } = getCartTotal();
 
-  const handlePlaceOrder = () => {
-    clearCart();
-    alert('Order placed successfully!');
-    navigation.navigate('Menu');
+  const handlePlaceOrder = async () => {
+    if (!cartId) {
+      Alert.alert('Error', 'Order not found. Please go back and try again.');
+      return;
+    }
+
+    if (paymentMethod === 'newCard') {
+      if (!cardNumber || !expiry || !cvv || !nameOnCard) {
+        Alert.alert('Error', 'Please fill in all card details.');
+        return;
+      }
+    }
+
+    try {
+      setProcessing(true);
+
+      const paymentDetails = {
+        method: paymentMethod,
+        cardNumber: paymentMethod === 'newCard' ? cardNumber : null,
+        expiry: paymentMethod === 'newCard' ? expiry : null,
+        cvv: paymentMethod === 'newCard' ? cvv : null,
+        nameOnCard: paymentMethod === 'newCard' ? nameOnCard : null,
+        promoCode: promoCode || null,
+      };
+
+      const response = await fetch(API_ENDPOINTS.PAYMENT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: cartId,
+          paymentDetails,
+          userId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        clearCart();
+        Alert.alert(
+          'Success!',
+          `Order placed successfully!\nOrder ID: ${result.orderId}\nPayment Reference: ${result.paymentReference}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate to Menu tab by resetting navigation
+                navigation.getParent()?.getParent()?.navigate('Menu');
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to process payment. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (
@@ -153,11 +216,18 @@ export default function PaymentScreen({ navigation }) {
         </View>
 
         <TouchableOpacity
-          style={styles.placeOrderButton}
+          style={[styles.placeOrderButton, processing && styles.placeOrderButtonDisabled]}
           onPress={handlePlaceOrder}
+          disabled={processing}
         >
-          <Text style={styles.placeOrderIcon}>✓</Text>
-          <Text style={styles.placeOrderText}>Place Order & Pay</Text>
+          {processing ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <>
+              <Text style={styles.placeOrderIcon}>✓</Text>
+              <Text style={styles.placeOrderText}>Place Order & Pay</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         <View style={styles.securityNote}>
@@ -368,6 +438,9 @@ const styles = StyleSheet.create({
   securityText: {
     fontSize: 14,
     color: colors.textLight,
+  },
+  placeOrderButtonDisabled: {
+    opacity: 0.6,
   },
 });
 

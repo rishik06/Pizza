@@ -6,15 +6,19 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useCart } from '../context/CartContext';
 import { colors } from '../constants/colors';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function CheckoutScreen({ navigation }) {
   const [deliveryType, setDeliveryType] = useState('Delivery');
   const [timeOption, setTimeOption] = useState('ASAP');
   const [selectedLocation, setSelectedLocation] = useState(null);
-  const { getCartTotal } = useCart();
+  const [processing, setProcessing] = useState(false);
+  const { getCartTotal, cartId, userId } = useCart();
   const { subtotal, tax, deliveryFee, total } = getCartTotal();
 
   const locations = [
@@ -22,6 +26,56 @@ export default function CheckoutScreen({ navigation }) {
     'Uptown Location',
     'Riverside Location',
   ];
+
+  const handleContinueToPayment = async () => {
+    if (!cartId) {
+      Alert.alert('Error', 'Cart not found. Please go back and try again.');
+      return;
+    }
+
+    if (deliveryType === 'Pickup' && !selectedLocation) {
+      Alert.alert('Error', 'Please select a pickup location.');
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      
+      const address = {
+        type: deliveryType,
+        deliveryAddress: deliveryType === 'Delivery' 
+          ? '123 Main Street, Apt 4B, New York, NY 10001'
+          : null,
+        pickupLocation: deliveryType === 'Pickup' ? selectedLocation : null,
+        timeOption,
+      };
+
+      const response = await fetch(API_ENDPOINTS.CHECKOUT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: cartId,
+          address,
+          userId,
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        navigation.navigate('Payment');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to process checkout. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error processing checkout:', error);
+      Alert.alert('Error', 'Failed to process checkout. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -166,11 +220,18 @@ export default function CheckoutScreen({ navigation }) {
         </View>
 
         <TouchableOpacity
-          style={styles.continueButton}
-          onPress={() => navigation.navigate('Payment')}
+          style={[styles.continueButton, processing && styles.continueButtonDisabled]}
+          onPress={handleContinueToPayment}
+          disabled={processing}
         >
-          <Text style={styles.continueButtonText}>Continue to Payment</Text>
-          <Text style={styles.continueButtonIcon}>→</Text>
+          {processing ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <>
+              <Text style={styles.continueButtonText}>Continue to Payment</Text>
+              <Text style={styles.continueButtonIcon}>→</Text>
+            </>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -344,6 +405,9 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  continueButtonDisabled: {
+    opacity: 0.6,
   },
 });
 

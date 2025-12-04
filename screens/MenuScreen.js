@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,49 @@ import {
   TouchableOpacity,
   Image,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useCart } from '../context/CartContext';
-import { pizzas, categories } from '../data/pizzas';
+import { categories } from '../data/pizzas';
 import { colors } from '../constants/colors';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function MenuScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [pizzas, setPizzas] = useState([]);
+  const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
+
+  useEffect(() => {
+    fetchPizzas();
+  }, []);
+
+  const fetchPizzas = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(API_ENDPOINTS.PIZZAS);
+      const result = await response.json();
+      if (result.data) {
+        // Map backend data to match frontend structure
+        const mappedPizzas = result.data.map((pizza) => ({
+          id: pizza.id,
+          name: pizza.name,
+          description: pizza.description,
+          price: pizza.price,
+          image: pizza.imageUrl,
+          category: 'All', // Backend doesn't have category, default to 'All'
+        }));
+        setPizzas(mappedPizzas);
+      }
+    } catch (error) {
+      console.error('Error fetching pizzas:', error);
+      Alert.alert('Error', 'Failed to load menu. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredPizzas = pizzas.filter((pizza) => {
     const matchesSearch =
@@ -71,22 +105,33 @@ export default function MenuScreen() {
       </ScrollView>
 
       <ScrollView style={styles.pizzaList} showsVerticalScrollIndicator={false}>
-        {filteredPizzas.map((pizza) => (
-          <View key={pizza.id} style={styles.pizzaCard}>
-            <Image source={{ uri: pizza.image }} style={styles.pizzaImage} />
-            <View style={styles.pizzaInfo}>
-              <Text style={styles.pizzaName}>{pizza.name}</Text>
-              <Text style={styles.pizzaDescription}>{pizza.description}</Text>
-              <Text style={styles.pizzaPrice}>${pizza.price.toFixed(2)}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => addToCart(pizza)}
-            >
-              <Text style={styles.addButtonText}>+</Text>
-            </TouchableOpacity>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading menu...</Text>
           </View>
-        ))}
+        ) : filteredPizzas.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No pizzas found</Text>
+          </View>
+        ) : (
+          filteredPizzas.map((pizza) => (
+            <View key={pizza.id} style={styles.pizzaCard}>
+              <Image source={{ uri: pizza.image }} style={styles.pizzaImage} />
+              <View style={styles.pizzaInfo}>
+                <Text style={styles.pizzaName}>{pizza.name}</Text>
+                <Text style={styles.pizzaDescription}>{pizza.description}</Text>
+                <Text style={styles.pizzaPrice}>${pizza.price.toFixed(2)}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => addToCart(pizza)}
+              >
+                <Text style={styles.addButtonText}>+</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -202,6 +247,27 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.textLight,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: colors.textLight,
   },
 });
 

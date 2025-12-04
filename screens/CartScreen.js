@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,34 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useCart } from '../context/CartContext';
 import { colors } from '../constants/colors';
 
 export default function CartScreen({ navigation }) {
-  const { cartItems, updateQuantity, getCartTotal } = useCart();
+  const { cartItems, updateQuantity, getCartTotal, saveCartToBackend } = useCart();
   const { subtotal, tax, deliveryFee, total } = getCartTotal();
+  const [saving, setSaving] = useState(false);
+
+  const handleProceedToCheckout = async () => {
+    if (cartItems.length === 0) {
+      Alert.alert('Empty Cart', 'Please add items to your cart first.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await saveCartToBackend();
+      navigation.navigate('Checkout');
+    } catch (error) {
+      console.error('Error saving cart:', error);
+      Alert.alert('Error', 'Failed to save cart. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -77,12 +98,17 @@ export default function CartScreen({ navigation }) {
             </View>
 
             <TouchableOpacity
-              style={styles.checkoutButton}
-              onPress={() => navigation.navigate('Checkout')}
+              style={[styles.checkoutButton, saving && styles.checkoutButtonDisabled]}
+              onPress={handleProceedToCheckout}
+              disabled={saving}
             >
-              <Text style={styles.checkoutButtonText}>
-                Proceed to Checkout
-              </Text>
+              {saving ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.checkoutButtonText}>
+                  Proceed to Checkout
+                </Text>
+              )}
             </TouchableOpacity>
           </>
         )}
@@ -232,6 +258,9 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  checkoutButtonDisabled: {
+    opacity: 0.6,
   },
 });
 
