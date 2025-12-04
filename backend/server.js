@@ -7,8 +7,8 @@ const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = 3000;
-const DB_PATH = './pizza_orders.db';
+const PORT = process.env.PORT || 3000;
+const DB_PATH = process.env.DB_PATH || './pizza_orders.db';
 
 // --- Middlewares ---
 app.use(bodyParser.json());
@@ -92,6 +92,13 @@ function seedPizzas() {
         }
     });
 }
+
+// ======================================================================
+// Health Check Endpoint (for Render deployment)
+// ======================================================================
+app.get('/', (req, res) => {
+    res.json({ message: 'Pizza Ordering API is running', status: 'ok' });
+});
 
 // ======================================================================
 // 1. API Endpoint: Menu (Screen 1) - Fetch all available pizzas
@@ -218,8 +225,8 @@ app.post('/api/payment', (req, res) => {
 });
 
 // --- Start Server ---
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
     console.log(`Endpoints available:`);
     console.log(`- GET /api/pizzas (Menu)`);
     console.log(`- POST /api/cart (Cart)`);
